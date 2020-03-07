@@ -1,0 +1,17 @@
+bin/
+lib/
+filter_server
+*~
+*.backup
+*.a
+*.o
+*.kate-swp
+*.so
+*.local
+*.creator.user
+*.pro.user
+*.tar.gz
+*.stash
+*-saved*
+*-wip*
+??.sh

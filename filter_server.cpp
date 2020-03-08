@@ -36,8 +36,8 @@
 #include "utilities.h"
 #include "listener_socket.h"
 
-#define MAXIMUM_CONNECTIONS   80
-#define VERSION_STRING        "1.2.1"
+#define MAXIMUM_CONNECTIONS   100
+#define VERSION_STRING        "1.2.2"
 
 
 //------------------------------------------------------------------------------
@@ -73,9 +73,9 @@ static void printHelp ()
          "\n"
          "--timeout, -t  The maximum time in seconds that a session is allowed to run for.\n"
          "               It may be qualified with m, h, d or w for minutes, hours, days\n"
-         "               and weeks respectively. 'none' means no timeout.\n"
+         "               and weeks respectively.\n"
          "               The timeout will be adjusted to be >= 1.0 seconds if needs be.\n"
-         "               The default is 1d.\n"
+         "               The default is no timeout applied to a session.\n"
          "\n"
          "--unzip, -u    Decompress the input (using gunzip) sent to the filter command.\n"
          "\n"
@@ -116,7 +116,12 @@ static void printHelp ()
 //------------------------------------------------------------------------------
 // Holds data about each child process,
 //
-enum ProcessState { psRunning, psTerminated, psKilled };
+enum ProcessState {
+   psRunning,
+   psTerminated,
+   psKilled
+};
+
 struct ProcessData {
    pid_t pid;
    ProcessState state;
@@ -214,7 +219,7 @@ int main (int argc, char** argv)
    bool inputIsCompressed = false;
    bool doCompressOutput = false;
    int maximumSessions = 20;
-   double maximumTime = 24.0 * 3600.0;  // 1 day
+   double maximumTime = 1.0E+20;  //  life of universe plus alot more ;-)
 
    // Process options
    //
@@ -271,21 +276,18 @@ int main (int argc, char** argv)
 
          case 't':
             {
-               if (strcmp (optarg, "none") == 0) {
-                  maximumTime = 1.0E+20;  //  life of universe plus alot more ;-)
-                  break;
-               }
-
                char xx = ' ';
                int n = sscanf (optarg, "%ld%c", &value, &xx);
                if (n < 1) {
-                  // We expect atleat a value.
+                  // We expect at least one value.
                   //
                   printUsage (stderr);
                   return 1;
                }
 
                if (n == 1) {
+                  // Just treat value as expressed in seconds.
+                  //
                   maximumTime = double (value);
                   break;
                }
@@ -376,7 +378,15 @@ int main (int argc, char** argv)
    //
    fprintf (stdout, "port :             %d\n", port);
    fprintf (stdout, "maximum sessions : %d\n", maximumSessions);
-   fprintf (stdout, "maximum time :     %.5g s\n", maximumTime);
+   if (maximumTime >= 1.0E+20) {
+      fprintf (stdout, "maximum time :     none\n");
+   } else if (maximumTime >= 86400.0) {
+      fprintf (stdout, "maximum time :     %.5g days\n", maximumTime / 86400.0);
+   } else if (maximumTime >= 3600.0) {
+      fprintf (stdout, "maximum time :     %.5g hours\n", maximumTime / 3600.0);
+   } else {
+      fprintf (stdout, "maximum time :     %.5g seconds\n", maximumTime);
+   }
    fprintf (stdout, "decompress input : %s\n", inputIsCompressed ? "yes" : "no");
    fprintf (stdout, "compress output :  %s\n", doCompressOutput ? "yes" : "no");
 
@@ -443,14 +453,19 @@ int main (int argc, char** argv)
          continue;
       }
 
-      #define OCTET(n) int (pAddress->sa_data[n] >= 0 ? pAddress->sa_data[n] : pAddress->sa_data[n] + 256)
+      // OCTET applies required offset and converts signed char to unsigned value.
+      //
+      #define OCTET(n) int (pAddress->sa_data[(n)+1] >= 0 ?             \
+                            pAddress->sa_data[(n)+1] :                  \
+                            pAddress->sa_data[(n)+1] + 256)
 
-      fprintf (stdout, "Accept okay - we have a connection from: %d.%d.%d.%d\n",
-               OCTET(2), OCTET(3), OCTET(4), OCTET(5));
+
+      fprintf (stdout, "Accept successful - we have a connection from: %d.%d.%d.%d\n",
+               OCTET(1), OCTET(2), OCTET(3), OCTET(4));
 
       #undef OCTET
 
-      // Use forking to create a child process that will do all the work.
+      // Use fork to create a child process that will do all the work.
       //
       pid_t pid = fork ();
       if (pid < 0) {

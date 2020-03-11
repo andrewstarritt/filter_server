@@ -9,6 +9,11 @@ OBJECTS = utilities.o listener_socket.o filter_server.o
 
 all : filter_server
 
+install : /usr/local/bin/filter_server  Makefile
+
+/usr/local/bin/filter_server : filter_server  Makefile
+	sudo cp -f filter_server /usr/local/bin/filter_server
+
 filter_server : $(OBJECTS)  Makefile
 	g++ -Wall -pipe -o filter_server  $(OBJECTS)
 
